@@ -1,6 +1,16 @@
 var map;
 var query_is_running = false;
-var elements = [];
+var circleLayer = L.layerGroup();
+var circleUnion;
+
+//style for union result
+var unionStyle = {
+    fillColor: '#FA0',
+    fillOpacity: 0.2,
+    color: '#F00',
+    opacity: 0.5,
+    weight: 3
+}
 
 $(document).ready(function () {
 
@@ -13,7 +23,7 @@ $(document).ready(function () {
 
     navigator.geolocation.getCurrentPosition(function (pos) {
         var center = L.latLng(pos.coords.latitude, pos.coords.longitude);
-        map.setView(center, 14);
+        map.setView(center, 15);
     })
 
     map.on('zoomend', searchTraffic);
@@ -23,9 +33,6 @@ $(document).ready(function () {
 
 function searchTraffic() {
     if (query_is_running) return;
-
-    console.log('in search')
-
 
     query_is_running = true;
 
@@ -39,23 +46,38 @@ function searchTraffic() {
         dataType: 'json',
         crossDomain: true,
         success: function (res) {
-            query_is_running = false;
-            console.log('got something', res)
-            for (var i in res.elements) {
-                var id = res.elements[i].id;
-                if (typeof (elements[id]) == 'undefined') {
-                    var center = L.latLng(res.elements[i].lat, res.elements[i].lon);
-                    var obj = L.circle(center, {radius: 180, color: 'red'}).addTo(map);
-                    elements[id] = obj;
-                }
+            if (circleUnion) {
+                map.removeLayer(circleUnion);
             }
+
+            query_is_running = false;
+            for (var i in res.elements) {
+                var center = L.latLng(res.elements[i].lat, res.elements[i].lon);
+                // var obj = L.circle(center, {radius: 180, color: 'red'}).addTo(map);
+
+                var circ = LGeo.circle(center, 180, {color: 'red'}).addTo(circleLayer);
+            }
+
+            circleUnion = unify(circleLayer.getLayers()).addTo(map);
         }
     })
 }
 
-function getBbox (){
+function getBbox() {
     var bbox = map.getBounds();
     var a = bbox._southWest,
         b = bbox._northEast;
     return [a.lat, a.lng, b.lat, b.lng].join(",");
+}
+
+//union function using turf.js
+function unify(polyList) {
+    for (var i = 0; i < polyList.length; ++i) {
+        if (i == 0) {
+            var unionTemp = polyList[i].toGeoJSON();
+        } else {
+            unionTemp = turf.union(unionTemp, polyList[i].toGeoJSON());
+        }
+    }
+    return L.geoJson(unionTemp, {style: unionStyle});
 }
